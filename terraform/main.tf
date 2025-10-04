@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 # Security group to allow SSH, HTTP, NodePort
-resource "aws_security_group" "devnw_sg3" {
+resource "aws_security_group" "devnw3_sg" {
   name        = "dev-sgnw"
   description = "Allow SSH, HTTP, NodePort"
 
@@ -39,16 +39,16 @@ resource "aws_security_group" "devnw_sg3" {
   }
 
   tags = {
-    Name = "dev-sgnw3"
+    Name = "devnw3_sg"
   }
 }
 
 # EC2 instance for app deployment
-resource "aws_instance" "app_servernew3" {
+resource "aws_instance" "app3_servernew" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.devnw_sg3.id]
+  vpc_security_group_ids = [aws_security_group.devnw3_sg.id]
 
   user_data = <<-EOF
               #!/bin/bash
@@ -92,11 +92,11 @@ resource "aws_instance" "app_servernew3" {
               EOF
 
   tags = {
-    Name = "EC2-App-Servernew3"
+    Name = "app3_servernew"
   }
 }
 
 # Output public IP
 output "instance_public_ip" {
-  value = aws_instance.app_servernew3.public_ip
+  value = aws_instance.app3_servernew.public_ip
 }
