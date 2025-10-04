@@ -14,7 +14,7 @@ public class HelloControllerTest {
     @Test
     void testHelloEndpoint() {
         String response = helloController.hello();
-        assertEquals("Hello from Spring Boot CI/CD pipeline!", response);
+        assertEquals("Hello from Spring Boot CI/CD pipeline!1", response);
     }
 
     @Test
