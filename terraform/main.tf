@@ -2,10 +2,12 @@ provider "aws" {
   region = var.region
 }
 
-# Security group to allow SSH, HTTP, NodePort
+# ------------------------------
+# Security Group
+# ------------------------------
 resource "aws_security_group" "devnw3_sg" {
   name        = "dev-sgnw"
-  description = "Allow SSH, HTTP, NodePort"
+  description = "Allow SSH, HTTP, NodePort, Prometheus, Grafana"
 
   ingress {
     description = "SSH"
@@ -31,6 +33,22 @@ resource "aws_security_group" "devnw3_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "Prometheus"
+    from_port   = 9090
+    to_port     = 9090
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Grafana"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -43,7 +61,9 @@ resource "aws_security_group" "devnw3_sg" {
   }
 }
 
-# EC2 instance for app deployment
+# ------------------------------
+# EC2 Instance
+# ------------------------------
 resource "aws_instance" "app3_servernew" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
@@ -68,10 +88,7 @@ resource "aws_instance" "app3_servernew" {
               apt update -y
               apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-              # Add ubuntu user to docker group
               usermod -aG docker ubuntu
-
-              # Enable & start Docker
               systemctl enable docker
               systemctl start docker
 
@@ -86,9 +103,36 @@ resource "aws_instance" "app3_servernew" {
               # -------------------
               curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
               install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-
-              # Cleanup
               rm -f minikube-linux-amd64 kubectl
+
+              # -------------------
+              # Setup Prometheus
+              # -------------------
+              mkdir -p /opt/prometheus
+              cat <<EOPROM > /opt/prometheus/prometheus.yml
+              global:
+                scrape_interval: 15s
+
+              scrape_configs:
+                - job_name: 'prometheus'
+                  static_configs:
+                    - targets: ['localhost:9090']
+              EOPROM
+
+              docker run -d \
+                --name prometheus \
+                -p 9090:9090 \
+                -v /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
+                prom/prometheus
+
+              # -------------------
+              # Setup Grafana
+              # -------------------
+              docker run -d \
+                --name grafana \
+                -p 3000:3000 \
+                grafana/grafana
+
               EOF
 
   tags = {
@@ -96,7 +140,9 @@ resource "aws_instance" "app3_servernew" {
   }
 }
 
-# Output public IP
+# ------------------------------
+# Output
+# ------------------------------
 output "instance_public_ip" {
   value = aws_instance.app3_servernew.public_ip
 }
