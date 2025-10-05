@@ -89,6 +89,7 @@ resource "aws_instance" "app5_servernew" {
               apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
               usermod -aG docker ubuntu
+              newgrp docker
               systemctl enable docker
               systemctl start docker
 
