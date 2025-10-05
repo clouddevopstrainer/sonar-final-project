@@ -88,7 +88,8 @@ resource "aws_instance" "app3_servernew1" {
               apt update -y
               apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-              usermod -aG docker ubuntu
+              sudo usermod -aG docker ubuntu
+              newgrp docker
               systemctl enable docker
               systemctl start docker
 
