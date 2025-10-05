@@ -7,7 +7,7 @@ provider "aws" {
 # ------------------------------
 resource "aws_security_group" "devnw4_sg" {
   name        = "dev-sgnw1"
-  description = "Allow SSH, HTTP, NodePort, Prometheus, Grafana"
+  description = "Allow SSH, HTTP, NodePort, Grafana"
 
   ingress {
     description = "SSH"
@@ -29,14 +29,6 @@ resource "aws_security_group" "devnw4_sg" {
     description = "Kubernetes NodePort"
     from_port   = 30080
     to_port     = 30080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Prometheus"
-    from_port   = 9090
-    to_port     = 9090
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -81,53 +73,19 @@ resource "aws_instance" "app3_servernew1" {
               apt update -y
               apt upgrade -y
 
-              echo "===== Installing Docker ====="
-              apt install -y ca-certificates curl gnupg lsb-release
-              mkdir -p /etc/apt/keyrings
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+              echo "===== Installing Grafana OSS ====="
+              apt-get install -y apt-transport-https software-properties-common wget
+              mkdir -p /etc/apt/keyrings/
+              wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | tee /etc/apt/keyrings/grafana.gpg > /dev/null
+              echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | tee -a /etc/apt/sources.list.d/grafana.list
+              apt-get update
+              apt-get install -y grafana
 
-              apt update -y
-              apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+              echo "===== Starting Grafana ====="
+              systemctl enable grafana-server
+              systemctl start grafana-server
 
-              systemctl enable docker
-              systemctl start docker
-
-              echo "===== Waiting for Docker to be ready ====="
-              sleep 10
-
-              echo "===== Pulling Prometheus and Grafana images ====="
-              docker pull prom/prometheus
-              docker pull grafana/grafana
-
-              echo "===== Creating Prometheus config ====="
-              mkdir -p /opt/prometheus
-              cat <<EOPROM > /opt/prometheus/prometheus.yml
-              global:
-                scrape_interval: 15s
-
-              scrape_configs:
-                - job_name: 'prometheus'
-                  static_configs:
-                    - targets: ['localhost:9090']
-              EOPROM
-
-              echo "===== Starting Prometheus container ====="
-              docker run -d \
-                --restart always \
-                --name prometheus \
-                -p 9090:9090 \
-                -v /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
-                prom/prometheus
-
-              echo "===== Starting Grafana container ====="
-              docker run -d \
-                --restart always \
-                --name grafana \
-                -p 3000:3000 \
-                grafana/grafana
-
-              echo "===== Setup complete ====="
+              echo "===== Grafana Setup Complete ====="
               EOF
 
   tags = {
@@ -136,16 +94,11 @@ resource "aws_instance" "app3_servernew1" {
 }
 
 # ------------------------------
-# Output
+# Outputs
 # ------------------------------
 output "instance_public_ip" {
   value       = aws_instance.app3_servernew1.public_ip
   description = "Public IP of the EC2 instance"
-}
-
-output "prometheus_url" {
-  value       = "http://${aws_instance.app3_servernew1.public_ip}:9090"
-  description = "Prometheus Web UI"
 }
 
 output "grafana_url" {
