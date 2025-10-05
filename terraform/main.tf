@@ -5,9 +5,9 @@ provider "aws" {
 # ------------------------------
 # Security Group
 # ------------------------------
-resource "aws_security_group" "devnw4_sg" {
-  name        = "dev-sgnw1"
-  description = "Allow SSH, HTTP, NodePort, Grafana"
+resource "aws_security_group" "devnw3_sg" {
+  name        = "dev-sgnw"
+  description = "Allow SSH, HTTP, NodePort, Prometheus, Grafana"
 
   ingress {
     description = "SSH"
@@ -29,6 +29,14 @@ resource "aws_security_group" "devnw4_sg" {
     description = "Kubernetes NodePort"
     from_port   = 30080
     to_port     = 30080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Prometheus"
+    from_port   = 9090
+    to_port     = 9090
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -56,52 +64,85 @@ resource "aws_security_group" "devnw4_sg" {
 # ------------------------------
 # EC2 Instance
 # ------------------------------
-resource "aws_instance" "app3_servernew1" {
+resource "aws_instance" "app3_servernew" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.devnw4_sg.id]
+  vpc_security_group_ids = [aws_security_group.devnw3_sg.id]
 
   user_data = <<-EOF
               #!/bin/bash
               set -e
 
-              # Log setup
-              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-
-              echo "===== Updating system ====="
+              # Update system
               apt update -y
               apt upgrade -y
 
-              echo "===== Installing Grafana OSS ====="
-              apt-get install -y apt-transport-https software-properties-common wget
-              mkdir -p /etc/apt/keyrings/
-              wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | tee /etc/apt/keyrings/grafana.gpg > /dev/null
-              echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | tee -a /etc/apt/sources.list.d/grafana.list
-              apt-get update
-              apt-get install -y grafana
+              # -------------------
+              # Install Docker
+              # -------------------
+              apt install -y ca-certificates curl gnupg lsb-release
+              mkdir -p /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+              apt update -y
+              apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-              echo "===== Starting Grafana ====="
-              systemctl enable grafana-server
-              systemctl start grafana-server
+              usermod -aG docker ubuntu
+              systemctl enable docker
+              systemctl start docker
 
-              echo "===== Grafana Setup Complete ====="
+              # -------------------
+              # Install Minikube
+              # -------------------
+              curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+              install minikube-linux-amd64 /usr/local/bin/minikube
+
+              # -------------------
+              # Install kubectl
+              # -------------------
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+              rm -f minikube-linux-amd64 kubectl
+
+              # -------------------
+              # Setup Prometheus
+              # -------------------
+              mkdir -p /opt/prometheus
+              cat <<EOPROM > /opt/prometheus/prometheus.yml
+              global:
+                scrape_interval: 15s
+
+              scrape_configs:
+                - job_name: 'prometheus'
+                  static_configs:
+                    - targets: ['localhost:9090']
+              EOPROM
+
+              docker run -d \
+                --name prometheus \
+                -p 9090:9090 \
+                -v /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
+                prom/prometheus
+
+              # -------------------
+              # Setup Grafana
+              # -------------------
+              docker run -d \
+                --name grafana \
+                -p 3000:3000 \
+                grafana/grafana
+
               EOF
 
   tags = {
-    Name = "app3_servernew1"
+    Name = "app3_servernew"
   }
 }
 
 # ------------------------------
-# Outputs
+# Output
 # ------------------------------
 output "instance_public_ip" {
-  value       = aws_instance.app3_servernew1.public_ip
-  description = "Public IP of the EC2 instance"
-}
-
-output "grafana_url" {
-  value       = "http://${aws_instance.app3_servernew1.public_ip}:3000"
-  description = "Grafana Web UI"
+  value = aws_instance.app3_servernew.public_ip
 }
