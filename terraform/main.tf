@@ -74,41 +74,33 @@ resource "aws_instance" "app3_servernew1" {
               #!/bin/bash
               set -e
 
-              # Update system
+              # Log setup
+              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+              echo "===== Updating system ====="
               apt update -y
               apt upgrade -y
 
-              # -------------------
-              # Install Docker
-              # -------------------
+              echo "===== Installing Docker ====="
               apt install -y ca-certificates curl gnupg lsb-release
               mkdir -p /etc/apt/keyrings
               curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
               echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
-              apt update -y
-              apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-              sudo usermod -aG docker ubuntu
-              newgrp docker
+              apt update -y
+              apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
               systemctl enable docker
               systemctl start docker
 
-              # -------------------
-              # Install Minikube
-              # -------------------
-              curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-              install minikube-linux-amd64 /usr/local/bin/minikube
+              echo "===== Waiting for Docker to be ready ====="
+              sleep 10
 
-              # -------------------
-              # Install kubectl
-              # -------------------
-              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-              install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-              rm -f minikube-linux-amd64 kubectl
+              echo "===== Pulling Prometheus and Grafana images ====="
+              docker pull prom/prometheus
+              docker pull grafana/grafana
 
-              # -------------------
-              # Setup Prometheus
-              # -------------------
+              echo "===== Creating Prometheus config ====="
               mkdir -p /opt/prometheus
               cat <<EOPROM > /opt/prometheus/prometheus.yml
               global:
@@ -120,20 +112,22 @@ resource "aws_instance" "app3_servernew1" {
                     - targets: ['localhost:9090']
               EOPROM
 
+              echo "===== Starting Prometheus container ====="
               docker run -d \
+                --restart always \
                 --name prometheus \
                 -p 9090:9090 \
                 -v /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml \
                 prom/prometheus
 
-              # -------------------
-              # Setup Grafana
-              # -------------------
+              echo "===== Starting Grafana container ====="
               docker run -d \
+                --restart always \
                 --name grafana \
                 -p 3000:3000 \
                 grafana/grafana
 
+              echo "===== Setup complete ====="
               EOF
 
   tags = {
@@ -145,5 +139,16 @@ resource "aws_instance" "app3_servernew1" {
 # Output
 # ------------------------------
 output "instance_public_ip" {
-  value = aws_instance.app3_servernew1.public_ip
+  value       = aws_instance.app3_servernew1.public_ip
+  description = "Public IP of the EC2 instance"
+}
+
+output "prometheus_url" {
+  value       = "http://${aws_instance.app3_servernew1.public_ip}:9090"
+  description = "Prometheus Web UI"
+}
+
+output "grafana_url" {
+  value       = "http://${aws_instance.app3_servernew1.public_ip}:3000"
+  description = "Grafana Web UI"
 }
