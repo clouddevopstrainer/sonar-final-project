@@ -5,8 +5,8 @@ provider "aws" {
 # ------------------------------
 # Security Group
 # ------------------------------
-resource "aws_security_group" "devnw3_sg" {
-  name        = "dev-sgnw"
+resource "aws_security_group" "devnw4_sg" {
+  name        = "dev-sgnw1"
   description = "Allow SSH, HTTP, NodePort, Prometheus, Grafana"
 
   ingress {
@@ -64,11 +64,11 @@ resource "aws_security_group" "devnw3_sg" {
 # ------------------------------
 # EC2 Instance
 # ------------------------------
-resource "aws_instance" "app3_servernew" {
+resource "aws_instance" "app3_servernew1" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.devnw3_sg.id]
+  vpc_security_group_ids = [aws_security_group.devnw4_sg.id]
 
   user_data = <<-EOF
               #!/bin/bash
@@ -136,7 +136,7 @@ resource "aws_instance" "app3_servernew" {
               EOF
 
   tags = {
-    Name = "app3_servernew"
+    Name = "app3_servernew1"
   }
 }
 
@@ -144,5 +144,5 @@ resource "aws_instance" "app3_servernew" {
 # Output
 # ------------------------------
 output "instance_public_ip" {
-  value = aws_instance.app3_servernew.public_ip
+  value = aws_instance.app3_servernew1.public_ip
 }
