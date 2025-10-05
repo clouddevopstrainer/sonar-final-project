@@ -12,7 +12,7 @@ public class HelloServiceTest {
     @Test
     void testSayHello() {
         String result = helloService.sayHello();
-        assertEquals("Hello from Spring Boot CI/CD pipeline!1", result);
+        assertEquals("Hello from Spring Boot CI/CD pipeline!", result);
     }
 
     @Test
